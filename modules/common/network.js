@@ -32,7 +32,7 @@ module.exports = function(Orvibo) {
 
         udp.on("message", function(message, address) {
             // If it's from us, we don't want it
-            if (ip.address() == address.address) {
+            if (ip.address() == address.address || address.address == "127.0.0.1" || address.address == "0.0.0.0") {
                 return
             }
 
