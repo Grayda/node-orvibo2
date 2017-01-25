@@ -15,7 +15,7 @@ module.exports = function(Orvibo) {
             macPadding: device.macPadding,
             blank: "00000000",
             state: state ? "01" : "00"
-        }, device.address, device.port)
+        }, device, device.port)
     }
 
 }
