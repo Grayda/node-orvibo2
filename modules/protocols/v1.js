@@ -167,6 +167,43 @@ module.exports = function(Orvibo) {
                 Orvibo.devices.update(device)
                 Orvibo.events.emit("v1.socket.state.change", device, device.state)
                 break
+                // We've asked to change the state, and the socket has done so.
+            case "6463":
+                device = Orvibo.devices.get({
+                    macAddress: message.substr(12, 12)
+                })
+                Orvibo.debug("State change confirmation received for", device.macAddress)
+                Orvibo.events.emit("v1.socket.state.change.confirmation", device)
+                break
+                // The top of the AllOne has a button that is a wakeup / factory reset button.
+                // As long as you press (and not hold) the button, you get this message back
+            case "6469":
+                device = Orvibo.devices.get({
+                    macAddress: message.substr(12, 12)
+                })
+                Orvibo.debug("Reset button pressed on AllOne", device.macAddress)
+                Orvibo.events.emit("v1.allone.button.press", device)
+                break
+            case "6c73":
+                device = Orvibo.devices.get({
+                    macAddress: message.substr(12, 12)
+                })
+                Orvibo.debug("IR received. Length was", message.substr(52).length)
+                Orvibo.events.emit("v1.allone.ir.received", device, message.substr(52))
+                break
+                // We've asked to emit some IR, and it's done it.
+            case "6963":
+                device = Orvibo.devices.get({
+                    macAddress: message.substr(12, 12)
+                })
+                Orvibo.events.emit("v1.allone.ir.sent", device)
+                break
+                // We've asked to change the remote password, and we've had a message back.
+            case "6d70":
+                device = Orvibo.devices.get({
+                    macAddress: message.substr(12, 12)
+                })
+                this.emit("passwordchanged", device)
         }
     })
 
@@ -193,6 +230,7 @@ module.exports = function(Orvibo) {
         Orvibo.sendPacket(packet, address, port)
         Orvibo.events.emit("v1.message.sent", packet, address)
     }
+
     Orvibo.v1.discover = function(device) {
         if (typeof this.macAddress !== "undefined" && typeof device === "undefined") {
             device = this
@@ -201,12 +239,12 @@ module.exports = function(Orvibo) {
             Orvibo.v1.sendMessage({
                 commandID: "7161",
                 macAddress: ""
-            }, "255.255.255.255", Orvibo.v1.port)
+            }, { address: "255.255.255.255" }, Orvibo.v1.port)
         } else {
             Orvibo.v1.sendMessage({
                 commandID: "7161",
                 macAddress: device.macAddress || ""
-            }, device.address || "255.255.255.255", Orvibo.v1.port)
+            }, device || { address: "255.255.255.255" }, Orvibo.v1.port)
 
         }
     }
@@ -230,8 +268,8 @@ module.exports = function(Orvibo) {
             macPadding: device.macPadding,
             macReversed: Orvibo.switchEndian(device.macAddress),
             macReversedPadding: device.macPadding
-        }, device.address, Orvibo.v1.port)
-        Orvibo.events.emit("v1.device.subscribe", device, device.address)
+        }, device, Orvibo.v1.port)
+        Orvibo.events.emit("v1.device.subscribe", device, device)
 
     }
 
@@ -256,11 +294,27 @@ module.exports = function(Orvibo) {
             blank: "00000000",
             table: table,
             blank2: "000000000000"
-        }, device.address, Orvibo.v1.port)
+        }, device, Orvibo.v1.port)
 
-        Orvibo.events.emit("v1.device.query", device, device.address, table)
+        Orvibo.events.emit("v1.device.query", device, device, table)
 
     }
+
+    Orvibo.v1.modifyRemotePassword = function(device, oldpassword, newpassword) {
+        message = this.prepareMessage({
+            commandID: "6d70",
+            macAddress: device.macAddress,
+            macPadding: device.macPadding,
+            unknown: "78ed40",
+            recordlength: "0c",
+            oldpassword: new Buffer(_.padRight(oldpassword, 12, " ")).toString("hex"),
+            newpassword: new Buffer(_.padRight(newpassword, 12, " ")).toString("hex")
+        })
+
+        Orvibo.sendMessage(message, device, Orvibo.v1.port)
+    }
+
+
 
     Orvibo.v1.extractRecords = function(data, lengthcount, littleendian) {
         var res = []
@@ -268,7 +322,7 @@ module.exports = function(Orvibo) {
         // Only interested in looping while we have data
         while (data != "") {
             Orvibo.debug("Data left: %s", data)
-            if (args.littleendian) {
+            if (littleendian) {
                 num = parseInt(_.flatten(_.chunk(data.substr(0, lengthcount * 2), 2).reverse()).join(""), 16) * 2
             } else {
                 num = parseInt(data.substr(0, lengthcount * 2), 16) * 2
