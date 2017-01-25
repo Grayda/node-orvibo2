@@ -8,16 +8,16 @@ module.exports = function(Orvibo) {
         9999, // v2 communication
         4999 // Uhh.. v2 setup perhaps?
     ]
-    
+
     Orvibo.sockets = []
-    Orvibo.sendPacket = function(message, address, port) {
+    Orvibo.sendPacket = function(message, device, port) {
         Orvibo.sockets.forEach(function(socket) {
             if (socket.port == port || typeof port === "undefined") {
-                socket.socket.send(new Buffer(message.toLowerCase(), "hex"), socket.port, address, function(err, bytes) {
+                socket.socket.send(new Buffer(message.toLowerCase(), "hex"), socket.port, device.address, function(err, bytes) {
                     if (err) {
                         Orvibo.debug(err)
                     } else {
-                        Orvibo.debug("Sent message", bytes + " bytes", "Address: " + address, message)
+                        Orvibo.debug("Sent message", bytes + " bytes", "Address: " + device.address, message)
                     }
                 })
             }
